@@ -4,7 +4,7 @@ This Unity SDK serves as an easy point of access to the FuturePass authenticatio
 It focuses primarily on a custodial authentication flow where the app passes control to a browser, waits for login completion before handling and caching the resultant authentication packet. 
 
 <h2>Getting Started: Using the Debug Functions</h2>
-Find and add the FuturepassAuthenticationManager component script to your scene. This will serve as the point of interaction with this SDK.
+Find and add the "FuturePass" prefab within the package files, or add your own FuturePassAuthenticationManager component into your scene.
 <br><br>
 The component has debug buttons in the inspector to test the various functions the component provides. 
 To begin, press the "Start Login" button. This will open your default browser with the FuturePass authentication page. Follow the steps to login through these pages. 
