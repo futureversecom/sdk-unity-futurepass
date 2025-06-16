@@ -127,7 +127,12 @@ public class FuturepassAuthenticationManager : MonoBehaviour
     
     private const string RedirectUri = "http://localhost:3000/callback";
     
-    public void StartLogin(Action onSuccess = null, Action onFailure = null)
+    /// <summary>
+    /// Begin the custodial authentication flow. Opens a webpage and listens for a callback
+    /// </summary>
+    /// <param name="onSuccess">Authentication packet may be found in LoadedAuthenticationDetails</param>
+    /// <param name="onFailure"></param>
+    public void StartLogin(Action onSuccess = null, Action<Exception> onFailure = null)
     {
         _currentState = GenerateSecureRandomString(128);
         _currentCodeVerifier = GenerateSecureRandomString(64);
@@ -141,7 +146,7 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         _listener.StartTokenAuthListener((authCode,state,expectedState) =>
         {
             StartCoroutine(ParseAndExchangeCodeForCustodialResponseAsync(BaseUrl+"/", ClientID, _currentCodeVerifier, authCode, RedirectUri, () => {onSuccess?.Invoke();},
-                (exception) => { Debug.LogException(exception); onFailure?.Invoke(); }));
+                (exception) => { Debug.LogException(exception); onFailure?.Invoke(exception); }));
         });
         
         string nonce = GenerateSecureRandomString(128);
@@ -168,11 +173,25 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Abort the custodial flow, closing the web listener
+    /// </summary>
     public void AbortLogin()
     {
         _listener.StopTokenAuthListener();
     }
     
+    /// <summary>
+    /// Use the authentication code provided from the custodial callback to request a full authentication packet
+    /// </summary>
+    /// <param name="baseUrl">The URL to the authentication API</param>
+    /// <param name="clientID">The unique identifier of your client</param>
+    /// <param name="codeVerifier">The random string used to create your auth code</param>
+    /// <param name="authCode">The code returned from the custodial callback</param>
+    /// <param name="redirectUri">The callback uri</param>
+    /// <param name="onSuccess"></param>
+    /// <param name="onError"></param>
+    /// <returns></returns>
     private IEnumerator ParseAndExchangeCodeForCustodialResponseAsync(string baseUrl, string clientID, string codeVerifier, string authCode, string redirectUri, Action onSuccess, Action<Exception> onError)
     {
         var body = $"grant_type=authorization_code" +
@@ -205,34 +224,58 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Begin the refresh flow to request new authentication details using an existing refresh token
+    /// </summary>
     public void RefreshToken()
     {
         StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, LoadedAuthenticationDetails.RefreshToken));
     }
 
+    // Used to cache refresh token per environment
+    private string CacheKey => "Cached_Refresh_Token_" + CurrentEnvironment;
+    
+    /// <summary>
+    /// Encrypt and store the currently loaded refresh token
+    /// </summary>
     public void CacheRefreshToken()
     {
         if (LoadedAuthenticationDetails == null)
         {
-            PlayerPrefs.SetString("Cached_Refresh_Token", "");
+            PlayerPrefs.SetString(CacheKey, "");
             Debug.LogError("No loaded authentication details, erasing cached refresh token");
             return;
         }
-        var basicEncryptedRefreshToken =
-            EncryptionHandler.Encrypt(LoadedAuthenticationDetails?.RefreshToken, encKey);
-        PlayerPrefs.SetString("Cached_Refresh_Token", basicEncryptedRefreshToken);
+
+        CacheRefreshToken(LoadedAuthenticationDetails.RefreshToken, encKey);
     }
 
-    public void LoginFromCachedRefreshToken()
+    /// <summary>
+    /// Encrypt and store a refresh token using a user-defined password
+    /// </summary>
+    /// <param name="refreshToken">The token to cache</param>
+    /// <param name="passKey">The key used to encrypt the token, defaults to SDK standard</param>
+    public void CacheRefreshToken(string refreshToken, string passKey = encKey)
     {
-        string encryptedToken = PlayerPrefs.GetString("Cached_Refresh_Token");
+        var basicEncryptedRefreshToken =
+            EncryptionHandler.Encrypt(refreshToken, passKey);
+        PlayerPrefs.SetString(CacheKey, basicEncryptedRefreshToken);
+    }
+
+    /// <summary>
+    /// Load and decrypt a cached refresh token with a user-defined password
+    /// </summary>
+    /// <param name="passKey">Key used for decryption, defaults to SDK standard</param>
+    public void LoginFromCachedRefreshToken(string passKey = encKey)
+    {
+        string encryptedToken = PlayerPrefs.GetString(CacheKey);
         if (string.IsNullOrEmpty(encryptedToken))
         {
             Debug.LogError("No cached token found");
             return;
         }
         
-        if (EncryptionHandler.TryDecrypt(encryptedToken, encKey, out var decryptedToken))
+        if (EncryptionHandler.TryDecrypt(encryptedToken, passKey, out var decryptedToken))
         {
             StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, decryptedToken));
         }
@@ -242,6 +285,15 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Coroutine handling refresh token flow.
+    /// </summary>
+    /// <param name="baseUrl">The URL to the authentication API</param>
+    /// <param name="clientID">The unique identifier of your client</param>
+    /// <param name="refreshToken">The current valid refresh token</param>
+    /// <param name="onSuccess"></param>
+    /// <param name="onError"></param>
+    /// <returns></returns>
     private IEnumerator RefreshTokenRoutine(string baseUrl, string clientID, string refreshToken, Action onSuccess = null, Action<Exception> onError = null)
     {
         var body = $"grant_type=refresh_token" +
@@ -284,6 +336,12 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Set the currently valid authentication packet, optionally caching the refresh token for later use
+    /// </summary>
+    /// <param name="responseText"></param>
+    /// <param name="onError"></param>
+    /// <returns></returns>
     private bool TryUpdateAuthentication(string responseText, Action<Exception> onError = null)
     {
         CustodialAuthenticationResponse custodialResponse = null;
@@ -305,16 +363,6 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
     
-    private static string ConvertToHex(string message)
-    {
-        StringBuilder hex = new StringBuilder(message.Length * 2);
-        foreach (char c in message)
-        {
-            hex.AppendFormat("{0:X2}", (int)c);
-        }
-        return hex.ToString();
-    }
-    
     private string GenerateSecureRandomString(int length)
     {
         using (var rng = new RNGCryptoServiceProvider())
@@ -334,6 +382,9 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Basic JSON structure of errors provided by the FuturePass API
+    /// </summary>
     private class FVError
     {
         [JsonProperty("error")]
@@ -344,17 +395,15 @@ public class FuturepassAuthenticationManager : MonoBehaviour
     
     public static class EncryptionHandler
     {
-        // This constant is used to determine the keysize of the encryption algorithm in bits.
-        // We divide this by 8 within the code below to get the equivalent number of bytes.
+        // Key size of the encryption algorithm in bits.
         private const int Keysize = 256;
 
-        // This constant determines the number of iterations for the password bytes generation function.
+        // Number of iterations for the password bytes generation function.
         private const int DerivationIterations = 1000;
 
         public static string Encrypt(string plainText, string passPhrase)
         {
-            // Salt and IV is randomly generated each time, but is preprended to encrypted cipher text
-            // so that the same Salt and IV values can be used when decrypting.  
+            // Salt and IV is randomly generated each time, but is preprended to encrypted cipher text so that the same Salt and IV values can be used when decrypting.  
             var saltStringBytes = Generate256BitsOfRandomEntropy();
             var ivStringBytes = Generate256BitsOfRandomEntropy();
             var plainTextBytes = Encoding.UTF8.GetBytes(plainText);
@@ -433,10 +482,9 @@ public class FuturepassAuthenticationManager : MonoBehaviour
 
         private static byte[] Generate256BitsOfRandomEntropy()
         {
-            var randomBytes = new byte[32]; // 32 Bytes will give us 256 bits.
+            var randomBytes = new byte[32]; // 256 bits
             using (var rngCsp = new RNGCryptoServiceProvider())
             {
-                // Fill the array with cryptographically secure random bytes.
                 rngCsp.GetBytes(randomBytes);
             }
             return randomBytes;
