@@ -24,7 +24,7 @@ namespace Futureverse.FuturePass
                 }
                 else
                 {
-                    var newGo = new GameObject("Coroutine Scene Object");
+                    var newGo = new GameObject("FuturePass - CSO");
                     s_instance = newGo.AddComponent<CoroutineSceneObject>();
                 }
 

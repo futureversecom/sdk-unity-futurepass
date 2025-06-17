@@ -1,74 +1,20 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using UnityEngine;
 using System.Security.Cryptography;
+using System.Text;
 using System.Web;
 using Newtonsoft.Json;
+using UnityEngine;
 using UnityEngine.Networking;
 
-#if UNITY_EDITOR
-using UnityEditor;
-
 namespace Futureverse.FuturePass
 {
-    [CustomEditor(typeof(FuturepassAuthenticationManager))]
-    public class FuturepassAuthenticationManagerEditor : Editor
+    public static class FuturePassAuthentication
     {
-        public override void OnInspectorGUI()
-        {
-            base.OnInspectorGUI();
 
-            EditorGUILayout.Space();
-            var mg = (FuturepassAuthenticationManager)target;
-            if (GUILayout.Button("Start Login"))
-            {
-                mg.StartLogin();
-            }
-
-            if (GUILayout.Button("Abort Login"))
-            {
-                mg.AbortLogin();
-            }
-
-            if (GUILayout.Button("Refresh Token"))
-            {
-                mg.RefreshToken();   
-            }
-
-            if (GUILayout.Button("Cache Refresh Token"))
-            {
-                mg.CacheRefreshToken();
-            }
-
-            if (GUILayout.Button("Login From Cached Token"))
-            {
-                mg.LoginFromCachedRefreshToken();
-            }
-
-            EditorGUILayout.Space();
-        
-            if (mg.LoadedAuthenticationDetails != null)
-            {
-                string json = JsonConvert.SerializeObject(mg.LoadedAuthenticationDetails, Formatting.Indented);
-                EditorGUILayout.TextArea(json);
-            }
-            else
-            {
-                EditorGUILayout.TextArea("\n\n");
-            }
-        }
-    }
-}
-
-#endif
-
-namespace Futureverse.FuturePass
-{
-    public class FuturepassAuthenticationManager : MonoBehaviour
-    {
         public enum Environment
         {
             Development,
@@ -76,25 +22,25 @@ namespace Futureverse.FuturePass
             Production
         }
         
-        private CustodialHttpListener _listener;
-        public CustodialAuthenticationResponse LoadedAuthenticationDetails { get; set; }
+        public static Environment CurrentEnvironment { get; private set; }
+        public static CustodialAuthenticationResponse LoadedAuthenticationDetails { get; set; }
 
-        public Environment CurrentEnvironment;
-        public bool cacheRefreshToken = true;
+        private static CustodialHttpListener _listener;
+
+        private static bool _autoCacheRefreshToken;
+
+        private static string _currentState;
+        private static string _currentCodeVerifier;
         
-        private string _currentState;
-        private string _currentCodeVerifier;
-
         private const string DevelopmentClientID = "ApfHakM-BwcErAkQupb6i";
         private const string StagingClientID = "ApfHakM-BwcErAkQupb6i";
         private const string ProductionClientID = "i8YTchXgUDYPswRfs3A5n";
+        
         private const string ProductionBaseUrl = "https://login.pass.online";
         private const string StagingBaseUrl = "https://login.passonline.cloud";
         private const string DevelopmentBaseUrl = "https://login.passonline.cloud";
-
-        private const string encKey = "D_y>r(xy3=,hD1-"; // This should be replaced with a non-hardcoded implementation
         
-        private string ClientID
+        private static string ClientID
         {
             get
             {
@@ -112,7 +58,7 @@ namespace Futureverse.FuturePass
             }
         }
         
-        private string BaseUrl
+        private static string BaseUrl
         {
             get
             {
@@ -130,14 +76,28 @@ namespace Futureverse.FuturePass
             }
         }
         
+        // Used to cache refresh token per environment
+        private static string CacheKey => "Cached_Refresh_Token_" + CurrentEnvironment;
+        
+        private const string encKey = "D_y>r(xy3=,hD1-"; // This should be replaced with a non-hardcoded implementation
         private const string RedirectUri = "http://localhost:3000/callback";
+
+        public static void SetEnvironment(Environment environment)
+        {
+            CurrentEnvironment = environment;
+        }
+
+        public static void SetTokenAutoCache(bool cacheAutomatically)
+        {
+            _autoCacheRefreshToken = cacheAutomatically;
+        }
         
         /// <summary>
         /// Begin the custodial authentication flow. Opens a webpage and listens for a callback
         /// </summary>
         /// <param name="onSuccess">Authentication packet may be found in LoadedAuthenticationDetails</param>
         /// <param name="onFailure"></param>
-        public void StartLogin(Action onSuccess = null, Action<Exception> onFailure = null)
+        public static void StartLogin(Action onSuccess = null, Action<Exception> onFailure = null)
         {
             _currentState = GenerateSecureRandomString(128);
             _currentCodeVerifier = GenerateSecureRandomString(64);
@@ -150,7 +110,7 @@ namespace Futureverse.FuturePass
 
             _listener.StartTokenAuthListener((authCode,state,expectedState) =>
             {
-                StartCoroutine(ParseAndExchangeCodeForCustodialResponseAsync(BaseUrl+"/", ClientID, _currentCodeVerifier, authCode, RedirectUri, () => {onSuccess?.Invoke();},
+                CoroutineSceneObject.Instance.StartCoroutine(ParseAndExchangeCodeForCustodialResponseAsync(BaseUrl+"/", ClientID, _currentCodeVerifier, authCode, RedirectUri, () => {onSuccess?.Invoke();},
                     (exception) => { Debug.LogException(exception); onFailure?.Invoke(exception); }));
             });
             
@@ -181,7 +141,7 @@ namespace Futureverse.FuturePass
         /// <summary>
         /// Abort the custodial flow, closing the web listener
         /// </summary>
-        public void AbortLogin()
+        public static void AbortLogin()
         {
             _listener.StopTokenAuthListener();
         }
@@ -197,7 +157,7 @@ namespace Futureverse.FuturePass
         /// <param name="onSuccess"></param>
         /// <param name="onError"></param>
         /// <returns></returns>
-        private IEnumerator ParseAndExchangeCodeForCustodialResponseAsync(string baseUrl, string clientID, string codeVerifier, string authCode, string redirectUri, Action onSuccess, Action<Exception> onError)
+        private static IEnumerator ParseAndExchangeCodeForCustodialResponseAsync(string baseUrl, string clientID, string codeVerifier, string authCode, string redirectUri, Action onSuccess, Action<Exception> onError)
         {
             var body = $"grant_type=authorization_code" +
                        $"&code={authCode}" +
@@ -232,18 +192,15 @@ namespace Futureverse.FuturePass
         /// <summary>
         /// Begin the refresh flow to request new authentication details using an existing refresh token
         /// </summary>
-        public void RefreshToken()
+        public static void RefreshToken()
         {
-            StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, LoadedAuthenticationDetails.RefreshToken));
+            CoroutineSceneObject.Instance.StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, LoadedAuthenticationDetails.RefreshToken));
         }
-
-        // Used to cache refresh token per environment
-        private string CacheKey => "Cached_Refresh_Token_" + CurrentEnvironment;
         
         /// <summary>
         /// Encrypt and store the currently loaded refresh token
         /// </summary>
-        public void CacheRefreshToken()
+        public static void CacheRefreshToken()
         {
             if (LoadedAuthenticationDetails == null)
             {
@@ -260,7 +217,7 @@ namespace Futureverse.FuturePass
         /// </summary>
         /// <param name="refreshToken">The token to cache</param>
         /// <param name="passKey">The key used to encrypt the token, defaults to SDK standard</param>
-        public void CacheRefreshToken(string refreshToken, string passKey = encKey)
+        public static void CacheRefreshToken(string refreshToken, string passKey = encKey)
         {
             var basicEncryptedRefreshToken =
                 EncryptionHandler.Encrypt(refreshToken, passKey);
@@ -271,7 +228,7 @@ namespace Futureverse.FuturePass
         /// Load and decrypt a cached refresh token with a user-defined password
         /// </summary>
         /// <param name="passKey">Key used for decryption, defaults to SDK standard</param>
-        public void LoginFromCachedRefreshToken(string passKey = encKey)
+        public static void LoginFromCachedRefreshToken(string passKey = encKey)
         {
             string encryptedToken = PlayerPrefs.GetString(CacheKey);
             if (string.IsNullOrEmpty(encryptedToken))
@@ -282,7 +239,7 @@ namespace Futureverse.FuturePass
             
             if (EncryptionHandler.TryDecrypt(encryptedToken, passKey, out var decryptedToken))
             {
-                StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, decryptedToken));
+                CoroutineSceneObject.Instance.StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, decryptedToken));
             }
             else
             {
@@ -299,7 +256,7 @@ namespace Futureverse.FuturePass
         /// <param name="onSuccess"></param>
         /// <param name="onError"></param>
         /// <returns></returns>
-        private IEnumerator RefreshTokenRoutine(string baseUrl, string clientID, string refreshToken, Action onSuccess = null, Action<Exception> onError = null)
+        private static IEnumerator RefreshTokenRoutine(string baseUrl, string clientID, string refreshToken, Action onSuccess = null, Action<Exception> onError = null)
         {
             var body = $"grant_type=refresh_token" +
                        $"&refresh_token={refreshToken}" +
@@ -347,14 +304,14 @@ namespace Futureverse.FuturePass
         /// <param name="responseText"></param>
         /// <param name="onError"></param>
         /// <returns></returns>
-        private bool TryUpdateAuthentication(string responseText, Action<Exception> onError = null)
+        private static bool TryUpdateAuthentication(string responseText, Action<Exception> onError = null)
         {
             CustodialAuthenticationResponse custodialResponse = null;
             try
             {
                 custodialResponse = JsonConvert.DeserializeObject<CustodialAuthenticationResponse>(responseText);
                 LoadedAuthenticationDetails = custodialResponse;
-                if (cacheRefreshToken)
+                if (_autoCacheRefreshToken)
                 {
                     CacheRefreshToken();
                 }
@@ -368,7 +325,7 @@ namespace Futureverse.FuturePass
             }
         }
         
-        private string GenerateSecureRandomString(int length)
+        private static string GenerateSecureRandomString(int length)
         {
             using (var rng = new RNGCryptoServiceProvider())
             {
@@ -378,7 +335,7 @@ namespace Futureverse.FuturePass
             }
         }
 
-        private string GenerateCodeChallenge(string codeVerifier)
+        private static string GenerateCodeChallenge(string codeVerifier)
         {
             using (var sha256 = SHA256.Create())
             {
@@ -397,7 +354,7 @@ namespace Futureverse.FuturePass
             [JsonProperty("error_description")]
             public string ErrorDescription;
         }
-        
+
         public static class EncryptionHandler
         {
             // Key size of the encryption algorithm in bits.
@@ -424,7 +381,8 @@ namespace Futureverse.FuturePass
                         {
                             using (var memoryStream = new MemoryStream())
                             {
-                                using (var cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
+                                using (var cryptoStream =
+                                       new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
                                 {
                                     cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
                                     cryptoStream.FlushFinalBlock();
@@ -449,6 +407,7 @@ namespace Futureverse.FuturePass
                     decrypted = null;
                     return false;
                 }
+
                 // Get the complete stream of bytes that represent:
                 // [32 bytes of Salt] + [32 bytes of IV] + [n bytes of CipherText]
                 var cipherTextBytesWithSaltAndIv = Convert.FromBase64String(cipherText);
@@ -457,7 +416,8 @@ namespace Futureverse.FuturePass
                 // Get the IV bytes by extracting the next 32 bytes from the supplied cipherText bytes.
                 var ivStringBytes = cipherTextBytesWithSaltAndIv.Skip(Keysize / 8).Take(Keysize / 8).ToArray();
                 // Get the actual cipher text bytes by removing the first 64 bytes from the cipherText string.
-                var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((Keysize / 8) * 2).Take(cipherTextBytesWithSaltAndIv.Length - ((Keysize / 8) * 2)).ToArray();
+                var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((Keysize / 8) * 2)
+                    .Take(cipherTextBytesWithSaltAndIv.Length - ((Keysize / 8) * 2)).ToArray();
 
                 bool success = true;
                 try
@@ -474,7 +434,8 @@ namespace Futureverse.FuturePass
                             {
                                 using (var memoryStream = new MemoryStream(cipherTextBytes))
                                 {
-                                    using (var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
+                                    using (var cryptoStream =
+                                           new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
                                     using (var streamReader = new StreamReader(cryptoStream, Encoding.UTF8))
                                     {
                                         decrypted = streamReader.ReadToEnd();
@@ -491,7 +452,7 @@ namespace Futureverse.FuturePass
                 }
 
                 return success;
-                
+
             }
 
             private static byte[] Generate256BitsOfRandomEntropy()
@@ -501,9 +462,9 @@ namespace Futureverse.FuturePass
                 {
                     rngCsp.GetBytes(randomBytes);
                 }
+
                 return randomBytes;
             }
         }
     }
 }
-

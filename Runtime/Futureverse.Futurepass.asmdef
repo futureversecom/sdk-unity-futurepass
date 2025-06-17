@@ -1,3 +1,14 @@
 {
-	"name": "Futureverse.Futurepass"
+    "name": "Futureverse.FuturePass",
+    "rootNamespace": "Futureverse.FuturePass",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }
