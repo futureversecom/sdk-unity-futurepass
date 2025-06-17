@@ -24,7 +24,7 @@ The **Futurepass SDK** is an Unity Engine plugin for authenticating users and ma
 4. Press "Import" on the next window
 ---
 
-## API Reference
+## 📄 API Reference
 
 ### FuturePassAuthentication
 The primary source of functions and data when interacting with the FuturePass SDK
@@ -140,7 +140,7 @@ Simple HTTP listener implmenetation to receive callbacks from custodial web requ
   ```
 </details>
 
-## Getting Started: Using the Debug Functions
+## 🛠️ Getting Started: Using the Debug Functions
 
 <img align="right" src="docs/sc-prefab.png" width=45%>
 <p>Add the FuturePass prefab to your game scene</p>
