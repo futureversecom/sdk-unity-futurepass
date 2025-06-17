@@ -68,400 +68,350 @@ namespace Futureverse.FuturePass
 namespace Futureverse.FuturePass
 {
     public class FuturepassAuthenticationManager : MonoBehaviour
-{
-    public enum Environment
     {
-        Development,
-        Staging,
-        Production
-    }
-    
-    private CustodialHttpListener _listener;
-    public CustodialAuthenticationResponse LoadedAuthenticationDetails { get; set; }
-
-    public Environment CurrentEnvironment;
-    public bool cacheRefreshToken = true;
-    
-    private string _currentState;
-    private string _currentCodeVerifier;
-
-    private const string DevelopmentClientID = "ApfHakM-BwcErAkQupb6i";
-    private const string StagingClientID = "ApfHakM-BwcErAkQupb6i";
-    private const string ProductionClientID = "i8YTchXgUDYPswRfs3A5n";
-    private const string ProductionBaseUrl = "https://login.pass.online";
-    private const string StagingBaseUrl = "https://login.passonline.cloud";
-    private const string DevelopmentBaseUrl = "https://login.passonline.cloud";
-
-    private const string encKey = "D_y>r(xy3=,hD1-"; // This should be replaced with a non-hardcoded implementation
-    
-    private string ClientID
-    {
-        get
+        public enum Environment
         {
-            switch (CurrentEnvironment)
+            Development,
+            Staging,
+            Production
+        }
+        
+        private CustodialHttpListener _listener;
+        public CustodialAuthenticationResponse LoadedAuthenticationDetails { get; set; }
+
+        public Environment CurrentEnvironment;
+        public bool cacheRefreshToken = true;
+        
+        private string _currentState;
+        private string _currentCodeVerifier;
+
+        private const string DevelopmentClientID = "ApfHakM-BwcErAkQupb6i";
+        private const string StagingClientID = "ApfHakM-BwcErAkQupb6i";
+        private const string ProductionClientID = "i8YTchXgUDYPswRfs3A5n";
+        private const string ProductionBaseUrl = "https://login.pass.online";
+        private const string StagingBaseUrl = "https://login.passonline.cloud";
+        private const string DevelopmentBaseUrl = "https://login.passonline.cloud";
+
+        private const string encKey = "D_y>r(xy3=,hD1-"; // This should be replaced with a non-hardcoded implementation
+        
+        private string ClientID
+        {
+            get
             {
-                case Environment.Development:
-                    return DevelopmentClientID;
-                case Environment.Staging:
-                    return StagingClientID;
-                case Environment.Production:
-                    return ProductionClientID;
-                default:
-                    return "";
-            }
-        }
-    }
-    
-    private string BaseUrl
-    {
-        get
-        {
-            switch (CurrentEnvironment)
-            {
-                case Environment.Development:
-                    return DevelopmentBaseUrl;
-                case Environment.Staging:
-                    return StagingBaseUrl;
-                case Environment.Production:
-                    return ProductionBaseUrl;
-                default:
-                    return "";
-            }
-        }
-    }
-    
-    private const string RedirectUri = "http://localhost:3000/callback";
-    
-    /// <summary>
-    /// Begin the custodial authentication flow. Opens a webpage and listens for a callback
-    /// </summary>
-    /// <param name="onSuccess">Authentication packet may be found in LoadedAuthenticationDetails</param>
-    /// <param name="onFailure"></param>
-    public void StartLogin(Action onSuccess = null, Action<Exception> onFailure = null)
-    {
-        _currentState = GenerateSecureRandomString(128);
-        _currentCodeVerifier = GenerateSecureRandomString(64);
-        string codeChallenge = GenerateCodeChallenge(_currentCodeVerifier);
-        
-        _listener = new CustodialHttpListener
-        {
-            ExpectedState = _currentState
-        };
-
-        _listener.StartTokenAuthListener((authCode,state,expectedState) =>
-        {
-            StartCoroutine(ParseAndExchangeCodeForCustodialResponseAsync(BaseUrl+"/", ClientID, _currentCodeVerifier, authCode, RedirectUri, () => {onSuccess?.Invoke();},
-                (exception) => { Debug.LogException(exception); onFailure?.Invoke(exception); }));
-        });
-        
-        string nonce = GenerateSecureRandomString(128);
-        Debug.Log("Logging in with URL: " + BaseUrl);
-        Debug.Log("Client ID: " + ClientID);
-        string authUrl = $"{BaseUrl}/auth?" +
-                         "response_type=code" +
-                         $"&client_id={ClientID}" +
-                         $"&redirect_uri={HttpUtility.UrlEncode(RedirectUri)}" +
-                         "&scope=openid" +
-                         $"&code_challenge={codeChallenge}" +
-                         "&code_challenge_method=S256" +
-                         "&response_mode=query" +
-                         "&prompt=login" +
-                         $"&state={_currentState}" +
-                         $"&nonce={nonce}";
-        try
-        {
-            Application.OpenURL(authUrl);
-        }
-        catch (Exception ex)
-        {
-            Debug.LogError("Error while requesting authorization code: " + ex.Message);
-        }
-    }
-    
-    /// <summary>
-    /// Abort the custodial flow, closing the web listener
-    /// </summary>
-    public void AbortLogin()
-    {
-        _listener.StopTokenAuthListener();
-    }
-    
-    /// <summary>
-    /// Use the authentication code provided from the custodial callback to request a full authentication packet
-    /// </summary>
-    /// <param name="baseUrl">The URL to the authentication API</param>
-    /// <param name="clientID">The unique identifier of your client</param>
-    /// <param name="codeVerifier">The random string used to create your auth code</param>
-    /// <param name="authCode">The code returned from the custodial callback</param>
-    /// <param name="redirectUri">The callback uri</param>
-    /// <param name="onSuccess"></param>
-    /// <param name="onError"></param>
-    /// <returns></returns>
-    private IEnumerator ParseAndExchangeCodeForCustodialResponseAsync(string baseUrl, string clientID, string codeVerifier, string authCode, string redirectUri, Action onSuccess, Action<Exception> onError)
-    {
-        var body = $"grant_type=authorization_code" +
-                   $"&code={authCode}" +
-                   $"&redirect_uri={HttpUtility.UrlEncode(redirectUri)}" +
-                   $"&client_id={clientID}" +
-                   $"&code_verifier={codeVerifier}";
-
-        string url = $"{baseUrl}token";
-        
-        var webRequest = new UnityWebRequest(url, "POST");
-        webRequest.downloadHandler = new DownloadHandlerBuffer();
-        webRequest.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-        webRequest.uploadHandler.contentType = "application/x-www-form-urlencoded";
-        webRequest.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-
-        yield return webRequest.SendWebRequest();
-
-        if (webRequest.result != UnityWebRequest.Result.Success)
-        {
-            Debug.LogError($"Error on token web request: {webRequest.error}");
-            onError(new Exception(webRequest.error + "\n" + webRequest.downloadHandler.text));
-            yield break;
-        }
-        
-        var responseText = webRequest.downloadHandler.text;
-        if (TryUpdateAuthentication(responseText, onError))
-        {
-            onSuccess?.Invoke();
-        }
-    }
-    
-    /// <summary>
-    /// Begin the refresh flow to request new authentication details using an existing refresh token
-    /// </summary>
-    public void RefreshToken()
-    {
-        StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, LoadedAuthenticationDetails.RefreshToken));
-    }
-
-    // Used to cache refresh token per environment
-    private string CacheKey => "Cached_Refresh_Token_" + CurrentEnvironment;
-    
-    /// <summary>
-    /// Encrypt and store the currently loaded refresh token
-    /// </summary>
-    public void CacheRefreshToken()
-    {
-        if (LoadedAuthenticationDetails == null)
-        {
-            PlayerPrefs.SetString(CacheKey, "");
-            Debug.LogError("No loaded authentication details, erasing cached refresh token");
-            return;
-        }
-
-        CacheRefreshToken(LoadedAuthenticationDetails.RefreshToken, encKey);
-    }
-
-    /// <summary>
-    /// Encrypt and store a refresh token using a user-defined password
-    /// </summary>
-    /// <param name="refreshToken">The token to cache</param>
-    /// <param name="passKey">The key used to encrypt the token, defaults to SDK standard</param>
-    public void CacheRefreshToken(string refreshToken, string passKey = encKey)
-    {
-        var basicEncryptedRefreshToken =
-            EncryptionHandler.Encrypt(refreshToken, passKey);
-        PlayerPrefs.SetString(CacheKey, basicEncryptedRefreshToken);
-    }
-
-    /// <summary>
-    /// Load and decrypt a cached refresh token with a user-defined password
-    /// </summary>
-    /// <param name="passKey">Key used for decryption, defaults to SDK standard</param>
-    public void LoginFromCachedRefreshToken(string passKey = encKey)
-    {
-        string encryptedToken = PlayerPrefs.GetString(CacheKey);
-        if (string.IsNullOrEmpty(encryptedToken))
-        {
-            Debug.LogError("No cached token found");
-            return;
-        }
-        
-        if (EncryptionHandler.TryDecrypt(encryptedToken, passKey, out var decryptedToken))
-        {
-            StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, decryptedToken));
-        }
-        else
-        {
-            Debug.LogError("Unable to decrypt refresh token");
-        }
-    }
-    
-    /// <summary>
-    /// Coroutine handling refresh token flow.
-    /// </summary>
-    /// <param name="baseUrl">The URL to the authentication API</param>
-    /// <param name="clientID">The unique identifier of your client</param>
-    /// <param name="refreshToken">The current valid refresh token</param>
-    /// <param name="onSuccess"></param>
-    /// <param name="onError"></param>
-    /// <returns></returns>
-    private IEnumerator RefreshTokenRoutine(string baseUrl, string clientID, string refreshToken, Action onSuccess = null, Action<Exception> onError = null)
-    {
-        var body = $"grant_type=refresh_token" +
-                   $"&refresh_token={refreshToken}" +
-                   $"&client_id={clientID}";
-
-        string url = $"{baseUrl}token";
-        
-        var webRequest = new UnityWebRequest(url, "POST");
-        webRequest.downloadHandler = new DownloadHandlerBuffer();
-        webRequest.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
-        webRequest.uploadHandler.contentType = "application/x-www-form-urlencoded";
-        webRequest.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-        
-        yield return webRequest.SendWebRequest();
-
-        if (webRequest.result != UnityWebRequest.Result.Success)
-        {
-            Debug.LogError($"Error on token web request: {webRequest.error} : {webRequest.downloadHandler.text}");
-            try
-            {
-                var fvError = JsonConvert.DeserializeObject<FVError>(webRequest.downloadHandler.text);
-                if (fvError.Error == "invalid_grant")
+                switch (CurrentEnvironment)
                 {
-                    Debug.LogError("Invalid grant request - ensure your cached refresh token is valid");
+                    case Environment.Development:
+                        return DevelopmentClientID;
+                    case Environment.Staging:
+                        return StagingClientID;
+                    case Environment.Production:
+                        return ProductionClientID;
+                    default:
+                        return "";
                 }
             }
-            catch
-            {
-                // The error was not a futureverse error; likely more generic like a 404 or 500 error.
-            }
-            onError?.Invoke(new Exception(webRequest.error + "\n" + webRequest.downloadHandler.text));
-            yield break;
         }
         
-        var responseText = webRequest.downloadHandler.text;
-        if (TryUpdateAuthentication(responseText, onError))
+        private string BaseUrl
         {
-            onSuccess?.Invoke();
-        }
-    }
-
-    /// <summary>
-    /// Set the currently valid authentication packet, optionally caching the refresh token for later use
-    /// </summary>
-    /// <param name="responseText"></param>
-    /// <param name="onError"></param>
-    /// <returns></returns>
-    private bool TryUpdateAuthentication(string responseText, Action<Exception> onError = null)
-    {
-        CustodialAuthenticationResponse custodialResponse = null;
-        try
-        {
-            custodialResponse = JsonConvert.DeserializeObject<CustodialAuthenticationResponse>(responseText);
-            LoadedAuthenticationDetails = custodialResponse;
-            if (cacheRefreshToken)
+            get
             {
-                CacheRefreshToken();
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogException(ex);
-            onError?.Invoke(ex);
-            return false;
-        }
-    }
-    
-    private string GenerateSecureRandomString(int length)
-    {
-        using (var rng = new RNGCryptoServiceProvider())
-        {
-            var data = new byte[length];
-            rng.GetBytes(data);
-            return Convert.ToBase64String(data).Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        }
-    }
-
-    private string GenerateCodeChallenge(string codeVerifier)
-    {
-        using (var sha256 = SHA256.Create())
-        {
-            var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
-            return Convert.ToBase64String(hash).Replace('+', '-').Replace('/', '_').TrimEnd('=');
-        }
-    }
-
-    /// <summary>
-    /// Basic JSON structure of errors provided by the FuturePass API
-    /// </summary>
-    private class FVError
-    {
-        [JsonProperty("error")]
-        public string Error;
-        [JsonProperty("error_description")]
-        public string ErrorDescription;
-    }
-    
-    public static class EncryptionHandler
-    {
-        // Key size of the encryption algorithm in bits.
-        private const int Keysize = 256;
-
-        // Number of iterations for the password bytes generation function.
-        private const int DerivationIterations = 1000;
-
-        public static string Encrypt(string plainText, string passPhrase)
-        {
-            // Salt and IV is randomly generated each time, but is preprended to encrypted cipher text so that the same Salt and IV values can be used when decrypting.  
-            var saltStringBytes = Generate256BitsOfRandomEntropy();
-            var ivStringBytes = Generate256BitsOfRandomEntropy();
-            var plainTextBytes = Encoding.UTF8.GetBytes(plainText);
-            using (var password = new Rfc2898DeriveBytes(passPhrase, saltStringBytes, DerivationIterations))
-            {
-                var keyBytes = password.GetBytes(Keysize / 8);
-                using (var symmetricKey = new RijndaelManaged())
+                switch (CurrentEnvironment)
                 {
-                    symmetricKey.BlockSize = 256;
-                    symmetricKey.Mode = CipherMode.CBC;
-                    symmetricKey.Padding = PaddingMode.PKCS7;
-                    using (var encryptor = symmetricKey.CreateEncryptor(keyBytes, ivStringBytes))
+                    case Environment.Development:
+                        return DevelopmentBaseUrl;
+                    case Environment.Staging:
+                        return StagingBaseUrl;
+                    case Environment.Production:
+                        return ProductionBaseUrl;
+                    default:
+                        return "";
+                }
+            }
+        }
+        
+        private const string RedirectUri = "http://localhost:3000/callback";
+        
+        /// <summary>
+        /// Begin the custodial authentication flow. Opens a webpage and listens for a callback
+        /// </summary>
+        /// <param name="onSuccess">Authentication packet may be found in LoadedAuthenticationDetails</param>
+        /// <param name="onFailure"></param>
+        public void StartLogin(Action onSuccess = null, Action<Exception> onFailure = null)
+        {
+            _currentState = GenerateSecureRandomString(128);
+            _currentCodeVerifier = GenerateSecureRandomString(64);
+            string codeChallenge = GenerateCodeChallenge(_currentCodeVerifier);
+            
+            _listener = new CustodialHttpListener
+            {
+                ExpectedState = _currentState
+            };
+
+            _listener.StartTokenAuthListener((authCode,state,expectedState) =>
+            {
+                StartCoroutine(ParseAndExchangeCodeForCustodialResponseAsync(BaseUrl+"/", ClientID, _currentCodeVerifier, authCode, RedirectUri, () => {onSuccess?.Invoke();},
+                    (exception) => { Debug.LogException(exception); onFailure?.Invoke(exception); }));
+            });
+            
+            string nonce = GenerateSecureRandomString(128);
+            Debug.Log("Logging in with URL: " + BaseUrl);
+            Debug.Log("Client ID: " + ClientID);
+            string authUrl = $"{BaseUrl}/auth?" +
+                             "response_type=code" +
+                             $"&client_id={ClientID}" +
+                             $"&redirect_uri={HttpUtility.UrlEncode(RedirectUri)}" +
+                             "&scope=openid" +
+                             $"&code_challenge={codeChallenge}" +
+                             "&code_challenge_method=S256" +
+                             "&response_mode=query" +
+                             "&prompt=login" +
+                             $"&state={_currentState}" +
+                             $"&nonce={nonce}";
+            try
+            {
+                Application.OpenURL(authUrl);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Error while requesting authorization code: " + ex.Message);
+            }
+        }
+        
+        /// <summary>
+        /// Abort the custodial flow, closing the web listener
+        /// </summary>
+        public void AbortLogin()
+        {
+            _listener.StopTokenAuthListener();
+        }
+        
+        /// <summary>
+        /// Use the authentication code provided from the custodial callback to request a full authentication packet
+        /// </summary>
+        /// <param name="baseUrl">The URL to the authentication API</param>
+        /// <param name="clientID">The unique identifier of your client</param>
+        /// <param name="codeVerifier">The random string used to create your auth code</param>
+        /// <param name="authCode">The code returned from the custodial callback</param>
+        /// <param name="redirectUri">The callback uri</param>
+        /// <param name="onSuccess"></param>
+        /// <param name="onError"></param>
+        /// <returns></returns>
+        private IEnumerator ParseAndExchangeCodeForCustodialResponseAsync(string baseUrl, string clientID, string codeVerifier, string authCode, string redirectUri, Action onSuccess, Action<Exception> onError)
+        {
+            var body = $"grant_type=authorization_code" +
+                       $"&code={authCode}" +
+                       $"&redirect_uri={HttpUtility.UrlEncode(redirectUri)}" +
+                       $"&client_id={clientID}" +
+                       $"&code_verifier={codeVerifier}";
+
+            string url = $"{baseUrl}token";
+            
+            var webRequest = new UnityWebRequest(url, "POST");
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+            webRequest.uploadHandler.contentType = "application/x-www-form-urlencoded";
+            webRequest.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"Error on token web request: {webRequest.error}");
+                onError(new Exception(webRequest.error + "\n" + webRequest.downloadHandler.text));
+                yield break;
+            }
+            
+            var responseText = webRequest.downloadHandler.text;
+            if (TryUpdateAuthentication(responseText, onError))
+            {
+                onSuccess?.Invoke();
+            }
+        }
+        
+        /// <summary>
+        /// Begin the refresh flow to request new authentication details using an existing refresh token
+        /// </summary>
+        public void RefreshToken()
+        {
+            StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, LoadedAuthenticationDetails.RefreshToken));
+        }
+
+        // Used to cache refresh token per environment
+        private string CacheKey => "Cached_Refresh_Token_" + CurrentEnvironment;
+        
+        /// <summary>
+        /// Encrypt and store the currently loaded refresh token
+        /// </summary>
+        public void CacheRefreshToken()
+        {
+            if (LoadedAuthenticationDetails == null)
+            {
+                PlayerPrefs.SetString(CacheKey, "");
+                Debug.LogError("No loaded authentication details, erasing cached refresh token");
+                return;
+            }
+
+            CacheRefreshToken(LoadedAuthenticationDetails.RefreshToken, encKey);
+        }
+
+        /// <summary>
+        /// Encrypt and store a refresh token using a user-defined password
+        /// </summary>
+        /// <param name="refreshToken">The token to cache</param>
+        /// <param name="passKey">The key used to encrypt the token, defaults to SDK standard</param>
+        public void CacheRefreshToken(string refreshToken, string passKey = encKey)
+        {
+            var basicEncryptedRefreshToken =
+                EncryptionHandler.Encrypt(refreshToken, passKey);
+            PlayerPrefs.SetString(CacheKey, basicEncryptedRefreshToken);
+        }
+
+        /// <summary>
+        /// Load and decrypt a cached refresh token with a user-defined password
+        /// </summary>
+        /// <param name="passKey">Key used for decryption, defaults to SDK standard</param>
+        public void LoginFromCachedRefreshToken(string passKey = encKey)
+        {
+            string encryptedToken = PlayerPrefs.GetString(CacheKey);
+            if (string.IsNullOrEmpty(encryptedToken))
+            {
+                Debug.LogError("No cached token found");
+                return;
+            }
+            
+            if (EncryptionHandler.TryDecrypt(encryptedToken, passKey, out var decryptedToken))
+            {
+                StartCoroutine(RefreshTokenRoutine(BaseUrl+"/", ClientID, decryptedToken));
+            }
+            else
+            {
+                Debug.LogError("Unable to decrypt refresh token");
+            }
+        }
+        
+        /// <summary>
+        /// Coroutine handling refresh token flow.
+        /// </summary>
+        /// <param name="baseUrl">The URL to the authentication API</param>
+        /// <param name="clientID">The unique identifier of your client</param>
+        /// <param name="refreshToken">The current valid refresh token</param>
+        /// <param name="onSuccess"></param>
+        /// <param name="onError"></param>
+        /// <returns></returns>
+        private IEnumerator RefreshTokenRoutine(string baseUrl, string clientID, string refreshToken, Action onSuccess = null, Action<Exception> onError = null)
+        {
+            var body = $"grant_type=refresh_token" +
+                       $"&refresh_token={refreshToken}" +
+                       $"&client_id={clientID}";
+
+            string url = $"{baseUrl}token";
+            
+            var webRequest = new UnityWebRequest(url, "POST");
+            webRequest.downloadHandler = new DownloadHandlerBuffer();
+            webRequest.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
+            webRequest.uploadHandler.contentType = "application/x-www-form-urlencoded";
+            webRequest.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"Error on token web request: {webRequest.error} : {webRequest.downloadHandler.text}");
+                try
+                {
+                    var fvError = JsonConvert.DeserializeObject<FVError>(webRequest.downloadHandler.text);
+                    if (fvError.Error == "invalid_grant")
                     {
-                        using (var memoryStream = new MemoryStream())
-                        {
-                            using (var cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
-                            {
-                                cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
-                                cryptoStream.FlushFinalBlock();
-                                // Create the final bytes as a concatenation of the random salt bytes, the random iv bytes and the cipher bytes.
-                                var cipherTextBytes = saltStringBytes;
-                                cipherTextBytes = cipherTextBytes.Concat(ivStringBytes).ToArray();
-                                cipherTextBytes = cipherTextBytes.Concat(memoryStream.ToArray()).ToArray();
-                                memoryStream.Close();
-                                cryptoStream.Close();
-                                return Convert.ToBase64String(cipherTextBytes);
-                            }
-                        }
+                        Debug.LogError("Invalid grant request - ensure your cached refresh token is valid");
                     }
                 }
+                catch
+                {
+                    // The error was not a futureverse error; likely more generic like a 404 or 500 error.
+                }
+                onError?.Invoke(new Exception(webRequest.error + "\n" + webRequest.downloadHandler.text));
+                yield break;
+            }
+            
+            var responseText = webRequest.downloadHandler.text;
+            if (TryUpdateAuthentication(responseText, onError))
+            {
+                onSuccess?.Invoke();
             }
         }
 
-        public static bool TryDecrypt(string cipherText, string passPhrase, out string decrypted)
+        /// <summary>
+        /// Set the currently valid authentication packet, optionally caching the refresh token for later use
+        /// </summary>
+        /// <param name="responseText"></param>
+        /// <param name="onError"></param>
+        /// <returns></returns>
+        private bool TryUpdateAuthentication(string responseText, Action<Exception> onError = null)
         {
-            if (string.IsNullOrEmpty(cipherText))
-            {
-                decrypted = null;
-                return false;
-            }
-            // Get the complete stream of bytes that represent:
-            // [32 bytes of Salt] + [32 bytes of IV] + [n bytes of CipherText]
-            var cipherTextBytesWithSaltAndIv = Convert.FromBase64String(cipherText);
-            // Get the saltbytes by extracting the first 32 bytes from the supplied cipherText bytes.
-            var saltStringBytes = cipherTextBytesWithSaltAndIv.Take(Keysize / 8).ToArray();
-            // Get the IV bytes by extracting the next 32 bytes from the supplied cipherText bytes.
-            var ivStringBytes = cipherTextBytesWithSaltAndIv.Skip(Keysize / 8).Take(Keysize / 8).ToArray();
-            // Get the actual cipher text bytes by removing the first 64 bytes from the cipherText string.
-            var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((Keysize / 8) * 2).Take(cipherTextBytesWithSaltAndIv.Length - ((Keysize / 8) * 2)).ToArray();
-
-            bool success = true;
+            CustodialAuthenticationResponse custodialResponse = null;
             try
             {
+                custodialResponse = JsonConvert.DeserializeObject<CustodialAuthenticationResponse>(responseText);
+                LoadedAuthenticationDetails = custodialResponse;
+                if (cacheRefreshToken)
+                {
+                    CacheRefreshToken();
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(ex);
+                onError?.Invoke(ex);
+                return false;
+            }
+        }
+        
+        private string GenerateSecureRandomString(int length)
+        {
+            using (var rng = new RNGCryptoServiceProvider())
+            {
+                var data = new byte[length];
+                rng.GetBytes(data);
+                return Convert.ToBase64String(data).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            }
+        }
+
+        private string GenerateCodeChallenge(string codeVerifier)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
+                return Convert.ToBase64String(hash).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+            }
+        }
+
+        /// <summary>
+        /// Basic JSON structure of errors provided by the FuturePass API
+        /// </summary>
+        private class FVError
+        {
+            [JsonProperty("error")]
+            public string Error;
+            [JsonProperty("error_description")]
+            public string ErrorDescription;
+        }
+        
+        public static class EncryptionHandler
+        {
+            // Key size of the encryption algorithm in bits.
+            private const int Keysize = 256;
+
+            // Number of iterations for the password bytes generation function.
+            private const int DerivationIterations = 1000;
+
+            public static string Encrypt(string plainText, string passPhrase)
+            {
+                // Salt and IV is randomly generated each time, but is preprended to encrypted cipher text so that the same Salt and IV values can be used when decrypting.  
+                var saltStringBytes = Generate256BitsOfRandomEntropy();
+                var ivStringBytes = Generate256BitsOfRandomEntropy();
+                var plainTextBytes = Encoding.UTF8.GetBytes(plainText);
                 using (var password = new Rfc2898DeriveBytes(passPhrase, saltStringBytes, DerivationIterations))
                 {
                     var keyBytes = password.GetBytes(Keysize / 8);
@@ -470,40 +420,90 @@ namespace Futureverse.FuturePass
                         symmetricKey.BlockSize = 256;
                         symmetricKey.Mode = CipherMode.CBC;
                         symmetricKey.Padding = PaddingMode.PKCS7;
-                        using (var decryptor = symmetricKey.CreateDecryptor(keyBytes, ivStringBytes))
+                        using (var encryptor = symmetricKey.CreateEncryptor(keyBytes, ivStringBytes))
                         {
-                            using (var memoryStream = new MemoryStream(cipherTextBytes))
+                            using (var memoryStream = new MemoryStream())
                             {
-                                using (var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
-                                using (var streamReader = new StreamReader(cryptoStream, Encoding.UTF8))
+                                using (var cryptoStream = new CryptoStream(memoryStream, encryptor, CryptoStreamMode.Write))
                                 {
-                                    decrypted = streamReader.ReadToEnd();
+                                    cryptoStream.Write(plainTextBytes, 0, plainTextBytes.Length);
+                                    cryptoStream.FlushFinalBlock();
+                                    // Create the final bytes as a concatenation of the random salt bytes, the random iv bytes and the cipher bytes.
+                                    var cipherTextBytes = saltStringBytes;
+                                    cipherTextBytes = cipherTextBytes.Concat(ivStringBytes).ToArray();
+                                    cipherTextBytes = cipherTextBytes.Concat(memoryStream.ToArray()).ToArray();
+                                    memoryStream.Close();
+                                    cryptoStream.Close();
+                                    return Convert.ToBase64String(cipherTextBytes);
                                 }
                             }
                         }
                     }
                 }
             }
-            catch
+
+            public static bool TryDecrypt(string cipherText, string passPhrase, out string decrypted)
             {
-                decrypted = null;
-                success = false;
+                if (string.IsNullOrEmpty(cipherText))
+                {
+                    decrypted = null;
+                    return false;
+                }
+                // Get the complete stream of bytes that represent:
+                // [32 bytes of Salt] + [32 bytes of IV] + [n bytes of CipherText]
+                var cipherTextBytesWithSaltAndIv = Convert.FromBase64String(cipherText);
+                // Get the saltbytes by extracting the first 32 bytes from the supplied cipherText bytes.
+                var saltStringBytes = cipherTextBytesWithSaltAndIv.Take(Keysize / 8).ToArray();
+                // Get the IV bytes by extracting the next 32 bytes from the supplied cipherText bytes.
+                var ivStringBytes = cipherTextBytesWithSaltAndIv.Skip(Keysize / 8).Take(Keysize / 8).ToArray();
+                // Get the actual cipher text bytes by removing the first 64 bytes from the cipherText string.
+                var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((Keysize / 8) * 2).Take(cipherTextBytesWithSaltAndIv.Length - ((Keysize / 8) * 2)).ToArray();
+
+                bool success = true;
+                try
+                {
+                    using (var password = new Rfc2898DeriveBytes(passPhrase, saltStringBytes, DerivationIterations))
+                    {
+                        var keyBytes = password.GetBytes(Keysize / 8);
+                        using (var symmetricKey = new RijndaelManaged())
+                        {
+                            symmetricKey.BlockSize = 256;
+                            symmetricKey.Mode = CipherMode.CBC;
+                            symmetricKey.Padding = PaddingMode.PKCS7;
+                            using (var decryptor = symmetricKey.CreateDecryptor(keyBytes, ivStringBytes))
+                            {
+                                using (var memoryStream = new MemoryStream(cipherTextBytes))
+                                {
+                                    using (var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
+                                    using (var streamReader = new StreamReader(cryptoStream, Encoding.UTF8))
+                                    {
+                                        decrypted = streamReader.ReadToEnd();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    decrypted = null;
+                    success = false;
+                }
+
+                return success;
+                
             }
 
-            return success;
-            
-        }
-
-        private static byte[] Generate256BitsOfRandomEntropy()
-        {
-            var randomBytes = new byte[32]; // 256 bits
-            using (var rngCsp = new RNGCryptoServiceProvider())
+            private static byte[] Generate256BitsOfRandomEntropy()
             {
-                rngCsp.GetBytes(randomBytes);
+                var randomBytes = new byte[32]; // 256 bits
+                using (var rngCsp = new RNGCryptoServiceProvider())
+                {
+                    rngCsp.GetBytes(randomBytes);
+                }
+                return randomBytes;
             }
-            return randomBytes;
         }
     }
-}
 }
 
