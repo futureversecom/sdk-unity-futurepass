@@ -1,7 +1,28 @@
-## sdk-unity-futurepass
+## Unity FuturePass SDK
 
-This Unity SDK serves as an easy point of access to the FuturePass authentication system. 
-It focuses primarily on a custodial authentication flow where the app passes control to a browser, waits for login completion before handling and caching the resultant authentication packet. 
+The **Futurepass SDK** is an Unity Engine plugin for authenticating users and managing access tokens with **Futurepass**—Futureverse’s identity and authentication system. It provides a seamless interface for custodia user login, token handling, and environment switching.
+
+## ✨ Features
+
+- 🔐 **Custodial Login** via browser-based authentication
+- 🔄 **Access & Refresh Token** management
+- 🌍 **Runtime Environment Switching** (Production/Staging)
+- 🔗 **Token callback events** for login/logout/refresh handling
+
+---
+
+## 🧩 Installation - Package Manager via Git
+
+1. In the Unity Package Manger, click '+' -> "Add package from git URL".
+2. Paste the git url for this project and press "add"
+
+## 🧩 Installation - Import .unitypackage
+
+1. In the [Releases](https://github.com/futureversecom/sdk-unity-futurepass/releases) area of this repository, download the .unitypackage for your target version
+2. Right-click in the Project window in the Unity engine, and select "Import Package -> Custom Package"
+3. Navigate to your downloaded .unityproject file
+4. Press "Import" on the next window
+---
 
 ## API Reference
 
