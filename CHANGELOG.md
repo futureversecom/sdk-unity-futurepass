@@ -1,3 +1,17 @@
+# [0.3.0](https://github.com/futureversecom/sdk-unity-futurepass/compare/v0.2.0...v0.3.0) (2025-06-17)
+
+
+### Bug Fixes
+
+* manager indentation ([768f8b8](https://github.com/futureversecom/sdk-unity-futurepass/commit/768f8b851952f7728af63e50377bf95399391113))
+
+
+### Features
+
+* refactor to static architecture ([c3f4374](https://github.com/futureversecom/sdk-unity-futurepass/commit/c3f43746f01eff3050ede860b016a2fdf32f0d27))
+
+
+
 # [0.2.0](https://github.com/futureversecom/sdk-unity-futurepass/compare/v0.1.3...v0.2.0) (2025-06-17)
 
 
