@@ -1,4 +1,4 @@
-## Unity FuturePass SDK
+# Unity FuturePass SDK
 
 The **Futurepass SDK** is an Unity Engine plugin for authenticating users and managing access tokens with **Futurepass**—Futureverse’s identity and authentication system. It provides a seamless interface for custodia user login, token handling, and environment switching.
 
