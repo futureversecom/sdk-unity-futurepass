@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -12,57 +11,63 @@ using UnityEngine.Networking;
 
 #if UNITY_EDITOR
 using UnityEditor;
-[CustomEditor(typeof(FuturepassAuthenticationManager))]
-public class FuturepassAuthenticationManagerEditor : Editor
+
+namespace Futureverse.FuturePass
 {
-    public override void OnInspectorGUI()
+    [CustomEditor(typeof(FuturepassAuthenticationManager))]
+    public class FuturepassAuthenticationManagerEditor : Editor
     {
-        base.OnInspectorGUI();
-
-        EditorGUILayout.Space();
-        var mg = (FuturepassAuthenticationManager)target;
-        if (GUILayout.Button("Start Login"))
+        public override void OnInspectorGUI()
         {
-            mg.StartLogin();
-        }
+            base.OnInspectorGUI();
 
-        if (GUILayout.Button("Abort Login"))
-        {
-            mg.AbortLogin();
-        }
+            EditorGUILayout.Space();
+            var mg = (FuturepassAuthenticationManager)target;
+            if (GUILayout.Button("Start Login"))
+            {
+                mg.StartLogin();
+            }
 
-        if (GUILayout.Button("Refresh Token"))
-        {
-            mg.RefreshToken();   
-        }
+            if (GUILayout.Button("Abort Login"))
+            {
+                mg.AbortLogin();
+            }
 
-        if (GUILayout.Button("Cache Refresh Token"))
-        {
-            mg.CacheRefreshToken();
-        }
+            if (GUILayout.Button("Refresh Token"))
+            {
+                mg.RefreshToken();   
+            }
 
-        if (GUILayout.Button("Login From Cached Token"))
-        {
-            mg.LoginFromCachedRefreshToken();
-        }
+            if (GUILayout.Button("Cache Refresh Token"))
+            {
+                mg.CacheRefreshToken();
+            }
 
-        EditorGUILayout.Space();
+            if (GUILayout.Button("Login From Cached Token"))
+            {
+                mg.LoginFromCachedRefreshToken();
+            }
+
+            EditorGUILayout.Space();
         
-        if (mg.LoadedAuthenticationDetails != null)
-        {
-            string json = JsonConvert.SerializeObject(mg.LoadedAuthenticationDetails, Formatting.Indented);
-            EditorGUILayout.TextArea(json);
-        }
-        else
-        {
-            EditorGUILayout.TextArea("\n\n");
+            if (mg.LoadedAuthenticationDetails != null)
+            {
+                string json = JsonConvert.SerializeObject(mg.LoadedAuthenticationDetails, Formatting.Indented);
+                EditorGUILayout.TextArea(json);
+            }
+            else
+            {
+                EditorGUILayout.TextArea("\n\n");
+            }
         }
     }
 }
+
 #endif
 
-
-public class FuturepassAuthenticationManager : MonoBehaviour
+namespace Futureverse.FuturePass
+{
+    public class FuturepassAuthenticationManager : MonoBehaviour
 {
     public enum Environment
     {
@@ -454,30 +459,39 @@ public class FuturepassAuthenticationManager : MonoBehaviour
             // Get the actual cipher text bytes by removing the first 64 bytes from the cipherText string.
             var cipherTextBytes = cipherTextBytesWithSaltAndIv.Skip((Keysize / 8) * 2).Take(cipherTextBytesWithSaltAndIv.Length - ((Keysize / 8) * 2)).ToArray();
 
-            using (var password = new Rfc2898DeriveBytes(passPhrase, saltStringBytes, DerivationIterations))
+            bool success = true;
+            try
             {
-                var keyBytes = password.GetBytes(Keysize / 8);
-                using (var symmetricKey = new RijndaelManaged())
+                using (var password = new Rfc2898DeriveBytes(passPhrase, saltStringBytes, DerivationIterations))
                 {
-                    symmetricKey.BlockSize = 256;
-                    symmetricKey.Mode = CipherMode.CBC;
-                    symmetricKey.Padding = PaddingMode.PKCS7;
-                    using (var decryptor = symmetricKey.CreateDecryptor(keyBytes, ivStringBytes))
+                    var keyBytes = password.GetBytes(Keysize / 8);
+                    using (var symmetricKey = new RijndaelManaged())
                     {
-                        using (var memoryStream = new MemoryStream(cipherTextBytes))
+                        symmetricKey.BlockSize = 256;
+                        symmetricKey.Mode = CipherMode.CBC;
+                        symmetricKey.Padding = PaddingMode.PKCS7;
+                        using (var decryptor = symmetricKey.CreateDecryptor(keyBytes, ivStringBytes))
                         {
-                            using (var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
-                            using (var streamReader = new StreamReader(cryptoStream, Encoding.UTF8))
+                            using (var memoryStream = new MemoryStream(cipherTextBytes))
                             {
-                                decrypted = streamReader.ReadToEnd();
-                                return true;
+                                using (var cryptoStream = new CryptoStream(memoryStream, decryptor, CryptoStreamMode.Read))
+                                using (var streamReader = new StreamReader(cryptoStream, Encoding.UTF8))
+                                {
+                                    decrypted = streamReader.ReadToEnd();
+                                }
                             }
                         }
                     }
                 }
             }
+            catch
+            {
+                decrypted = null;
+                success = false;
+            }
 
-            return false;
+            return success;
+            
         }
 
         private static byte[] Generate256BitsOfRandomEntropy()
@@ -491,3 +505,5 @@ public class FuturepassAuthenticationManager : MonoBehaviour
         }
     }
 }
+}
+
