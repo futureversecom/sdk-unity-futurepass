@@ -1,9 +1,125 @@
-# sdk-unity-futurepass
+## sdk-unity-futurepass
 
 This Unity SDK serves as an easy point of access to the FuturePass authentication system. 
 It focuses primarily on a custodial authentication flow where the app passes control to a browser, waits for login completion before handling and caching the resultant authentication packet. 
 
-<h2>Getting Started: Using the Debug Functions</h2>
+## API Reference
+
+### FuturePassAuthentication
+The primary source of functions and data when interacting with the FuturePass SDK
+<details>
+  <summary>Properties</summary>
+  
+  ```cs
+  Environment CurrentEnvironment; // The current Futurepass environment (Development, Staging, or Production)
+  ```
+  ```cs
+  CustodialAuthenticationResponse LoadedAuthenticationDetails; // The current
+  ```
+
+</details>
+<details>
+  <summary>Methods</summary>
+  
+  ```cs
+  SetEnvironment (Environment environment); // Set Futurepass environment (Development, Staging, or Production)
+  ```
+  ```cs
+  SetTokenAutoCache (bool cacheAutomatically); // Toggle whether refresh token is cached in PlayerPrefs
+  ```
+  ```cs
+  StartLogin(Action onSuccess, Action<Exception> onFailure); // Begin the custodial authentication process
+  ```
+  ```cs
+  AbortLogin(); // Cancel ongoing login, closing the web socket
+  ```
+  ```cs
+  RefreshToken(); // Request a new authentication packet using loaded refresh token
+  ```
+  ```cs
+  CacheRefreshToken(); // Encrypt and store loaded refresh token in PlayerPrefs
+  ```
+  ```cs
+  CacheRefreshToken(string refreshToken, string passKey); // Encrypt and store provided refresh token using passKey as encryption pass-key
+  ```
+  ```cs
+  LoginFromCachedRefreshToken(string passKey); // Load and decrypt cached refresh token, then request authentication
+  ```
+
+</details>
+
+### FuturePassExecutor
+An optional scene object to demonstrate runtime functionality and API usage.<br>
+The inspector contains a text area to view loaded authentication data
+<details>
+  <summary>Properties</summary>
+
+  ```cs
+  FuturePassAuthentication‎.Environment environment; // Inspector enum field to set Futurepass environment
+  ```
+  ```cs
+  bool cacheRefreshToken; // Inspector toggle whether to automatically cache refresh token
+  ```
+</details>
+<details>
+  <summary>Methods</summary>
+
+  ```cs
+  StartLogin(); // Begin the custodial authentication process
+  ```
+  ```cs
+  AbortLogin(); // Cancel ongoing login, closing the web socket
+  ```
+  ```cs
+  RefreshToken(); // Request a new authentication packet using loaded refresh token
+  ```
+  ```cs
+  CacheRefreshToken(); // Encrypt and store loaded refresh token in PlayerPrefs
+  ```
+  ```cs
+  LoginFromCachedRefreshToken(string passKey); // Load and decrypt cached refresh token, then request authentication
+  ```
+</details>
+
+### CoroutineSceneObject
+A utility object used to run coroutines from the static `FuturePassAuthentication` class
+<details>
+  <summary>Properties</summary>
+
+  ```cs
+  CoroutineSceneObject Instance; // Singleton reference to the scene object
+  ```
+</details>
+
+### CustodialHttpListener
+Simple HTTP listener implmenetation to receive callbacks from custodial web requests
+<details>
+  <summary>Properties</summary>
+
+  ```cs
+  CustodialHttpListener Instance; // Singleton reference to the listener object
+  ```
+  ```cs
+  string ExpectedState; // The expected state value for validating CSRF protection
+  ```
+</details>
+<details>
+  <summary>Methods</summary>
+
+  ```cs
+  StartTokenAuthListener(Action<string,string,string> onAuthCodeReceived); // Create HttpListener and begin listening for callbacks. On receiving a valid packet, returns auth code details (authCode, state, ExpectedState)
+  ```
+
+  ```cs
+  StopAuthTokenListener(); // Close HttpListener connection
+  ```
+
+  ```cs
+  byte[] ConvertFromBase64String‎(string base64); // Convert a base64 string into a byte[]
+  ```
+</details>
+
+## Getting Started: Using the Debug Functions
 
 <img align="right" src="docs/sc-prefab.png" width=45%>
 
