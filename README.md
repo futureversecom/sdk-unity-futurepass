@@ -176,3 +176,44 @@ If you fail authentication, or want to cancel mid-process, you may use the "Abor
 <br>
 
 <p>The refresh token is cached by default whenever you perform a custodial flow, or a refresh flow. You may disable this behaviour by un-ticking the "Cache Refresh Token" boolean.</p>
+
+## 🛠️ Getting Started: Process Login
+
+```cs
+using Auth = Futureverse.FuturePass.FuturePassAuthentication;
+
+void Run() {
+  Auth.SetEnvironment(Auth.Environment.Staging);
+  Auth.StartLogin(onSuccess: () => {
+    var token = Auth.LoadedAuthenticationDetails.AccessToken;
+    var fpass = Auth.LoadedAuthenticationDetails.DecodedToken.Futurepass;
+  }
+}
+```
+
+## 🛠️ Getting Started: Login From Cached Token
+
+Caching a token and using it to login allows for a smoother user experience. They do not need to repeat the custodial flow every time they launch the app, only if their token expires. 
+
+```cs
+using Auth = Futureverse.FuturePass.FuturePassAuthentication;
+
+// Call this function any time after a login has occured (either in this session or a previous one)
+void CacheToken() {
+  Auth.SetEnvironment(Auth.Environment.Staging);
+  Auth.CacheRefreshToken();
+}
+
+// This function will attempt to locate a previously cached token, and login with it
+void LoginFromToken() {
+  Auth.LoginFromCachedRefreshToken(
+    onSuccess: () => {
+      var token = Auth.LoadedAuthenticationDetails.AccessToken;
+    },
+    onFailure: (ex) => {
+      // Either no refresh token found, or the refresh token login process failured. 
+      // Start a standard custodial login
+    }
+  );
+}
+```
