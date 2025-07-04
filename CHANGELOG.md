@@ -1,3 +1,12 @@
+## [0.3.1](https://github.com/futureversecom/sdk-unity-futurepass/compare/v0.3.0...v0.3.1) (2025-07-04)
+
+
+### Bug Fixes
+
+* add meta files for docs and package files ([ac186a5](https://github.com/futureversecom/sdk-unity-futurepass/commit/ac186a5f95223986f409eea30fb519de52e58a3c))
+
+
+
 # [0.3.0](https://github.com/futureversecom/sdk-unity-futurepass/compare/v0.2.0...v0.3.0) (2025-06-17)
 
 
