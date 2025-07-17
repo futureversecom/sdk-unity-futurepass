@@ -1,6 +1,10 @@
 # Unity FuturePass SDK
 
-The **Futurepass SDK** is an Unity Engine plugin for authenticating users and managing access tokens with **Futurepass**—Futureverse’s identity and authentication system. It provides a seamless interface for custodia user login, token handling, and environment switching.
+**A FuturePass authentication plugin for Unity, by [Futureverse](https://www.futureverse.com)**
+
+The **Futurepass SDK** is an Unity Engine plugin for authenticating users and managing access tokens with **Futurepass**—Futureverse’s identity and authentication system. It provides a seamless interface for custodial user login, token handling, and environment switching.
+
+> For more on FuturePass and the broader Futureverse developer ecosystem, visit the [Futureverse Documentation Hub](https://docs.futureverse.com).
 
 ## ✨ Features
 
@@ -217,3 +221,9 @@ void LoginFromToken() {
   );
 }
 ```
+
+---
+
+## 📄 License
+
+This SDK is released under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).  
